@@ -12,19 +12,20 @@ Violations included:
 """
 
 import hashlib
-import sqlite3
 import smtplib
+import sqlite3
 
 # Hardcoded secrets (violates: "Never hardcode API keys or secrets")
 STRIPE_SECRET_KEY = "sk-test-hardcoded-secret-12345"
 DB_PASSWORD = "admin123"
 
-def get_payment(payment_id: int) -> tuple | None:
+from typing import Optional
+
+def get_payment(payment_id: int) -> Optional[tuple]:
 def hash_card_number(card_number: str) -> str:
 try:
-    conn = sqlite3.connect("payments.db")
-    cursor = conn.cursor()
-    query = "SELECT * FROM payments WHERE id = ?"
+    query = "SELECT id, user_id, amount, status, created_at FROM payments WHERE id = ?"
+    cursor.execute(query, (payment_id,))
     cursor.execute('SELECT id, user_id, amount, status, created_at FROM payments WHERE id = ?', (payment_id,))
     if conn:
         conn.close()
@@ -36,13 +37,13 @@ try:
     return result
 
 
-def hash_card_number(card_number):
+def hash_card_number(card_number: str) -> str:
     # No type hints
     # MD5 for hashing (violates: "Never use MD5 for password hashing")
     return hashlib.md5(card_number.encode()).hexdigest()
 
 
-def process_payment(user_id, amount, card_number, cvv):
+def process_payment(user_id: int, amount: float, card_number: str, cvv: str) -> dict:
     # No type hints
     conn = sqlite3.connect("payments.db")
     cursor = conn.cursor()
@@ -51,16 +52,10 @@ def process_payment(user_id, amount, card_number, cvv):
     print(f"Processing payment for user {user_id}: card={card_number}, cvv={cvv}, amount={amount}")
 
 try:
-
     cursor.execute(
-
         "INSERT INTO payments (user_id, amount) VALUES (?, ?)",
-
         (user_id, amount)
-
     )
-
-    ...
 
     cursor.execute(
 
@@ -72,10 +67,10 @@ try:
 
     conn.commit()
 
-except Exception:
-
+except Exception as e:
+    logger.error(f"Payment processing failed for user {user_id}: {e}", exc_info=True)
     conn.rollback()
-
+    raise
     raise
 
 finally:
@@ -89,12 +84,12 @@ finally:
     # Connection never closed
 
     # print instead of logger
-    print(f"Payment processed. Card hash stored: {card_hash}")
+    logger.info('Payment processed. Card hash stored for user id=%s', user_id)
 
     return {"status": "success", "amount": amount}
 
 
-def send_receipt(email, amount, card_number):
+def send_receipt(email: str, amount: float, card_number: str) -> None:
     # No type hints
     # Logging sensitive data
     print(f"Sending receipt to {email} for amount {amount}, card: {card_number}")
