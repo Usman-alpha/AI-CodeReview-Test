@@ -19,7 +19,7 @@ class Page(Generic[T]):
     page: int
     page_size: int
 
-    @property
+    @functools.cached_property
     def total_pages(self) -> int:
         if self.page_size == 0:
             return 0
@@ -55,7 +55,9 @@ def paginate(items: list[T], page: int = 1, page_size: int = 20) -> Page[T]:
 
     sliced = items[start:end]
 
-    logger.debug("Paginated %d items: page %d of %d", total, page, (total + page_size - 1) // page_size)
+    result = Page(items=sliced, total=total, page=page, page_size=page_size)
+logger.debug("Paginated %d items: page %d of %d", total, page, result.total_pages)
+return result
 
     return Page(
         items=sliced,
