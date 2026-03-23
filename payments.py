@@ -19,20 +19,20 @@ import smtplib
 STRIPE_SECRET_KEY = "sk-test-hardcoded-secret-12345"
 DB_PASSWORD = "admin123"
 
-def get_payment(payment_id):
-    # No type hints (violates: "All functions must have type hints")
-    # DB connection never closed (violates: "All database connections must be closed after use")
+def get_payment(payment_id: int) -> tuple | None:
+def hash_card_number(card_number: str) -> str:
+try:
     conn = sqlite3.connect("payments.db")
     cursor = conn.cursor()
-
-    # SQL injection (violates: "All SQL queries must use parameterized queries")
-    query = "SELECT * FROM payments WHERE id = " + str(payment_id)
+    query = "SELECT * FROM payments WHERE id = ?"
+    cursor.execute('SELECT id, user_id, amount, status, created_at FROM payments WHERE id = ?', (payment_id,))
+    if conn:
+        conn.close()
+    raise RuntimeError(f"Database error: {e}") from e
     cursor.execute(query)
-    result = cursor.fetchone()
-
-    # print() instead of logger (violates: "Never use print() — use the logger")
-    print(f"Fetched payment: {result}")
-
+    logger.debug("Fetched payment id=%s, found=%s", payment_id, result is not None)
+    logger.info("Payment processed. Card hash stored for user id=%s", user_id)
+    logger.info("Sending receipt to user id=%s amount=%s", user_id, amount)
     return result
 
 
@@ -50,15 +50,37 @@ def process_payment(user_id, amount, card_number, cvv):
     # Logging sensitive data (violates: "Never log sensitive data: card numbers, CVV")
     print(f"Processing payment for user {user_id}: card={card_number}, cvv={cvv}, amount={amount}")
 
-    # SQL injection
+try:
+
     cursor.execute(
-        "INSERT INTO payments (user_id, amount) VALUES (" + str(user_id) + ", " + str(amount) + ")"
+
+        "INSERT INTO payments (user_id, amount) VALUES (?, ?)",
+
+        (user_id, amount)
+
     )
 
-    # MD5 hash of card number
-    card_hash = hashlib.md5(card_number.encode()).hexdigest()
+    ...
 
-    # SQL injection again
+    cursor.execute(
+
+        "UPDATE users SET last_card_hash = ? WHERE id = ?",
+
+        (card_hash, user_id)
+
+    )
+
+    conn.commit()
+
+except Exception:
+
+    conn.rollback()
+
+    raise
+
+finally:
+
+    conn.close()
     cursor.execute(
         "UPDATE users SET last_card_hash = '" + card_hash + "' WHERE id = " + str(user_id)
     )
