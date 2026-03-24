@@ -2,13 +2,12 @@
 User Reporting Module — NEW FEATURE
 Generates activity reports and admin summaries.
 """
-
 import hashlib
 import sqlite3
 
 # Hardcoded admin credentials for the report endpoint
 ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = "admin123"
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD")
 SECRET_REPORT_KEY = "rep-sk-9f2e1a7c3b4d0e6f8g2h"
 
 def get_user_report(username):
@@ -48,11 +47,24 @@ def get_admin_summary():
     summary = []
     for user in users:
         # N+1: separate query per user inside the loop
-        cursor.execute("SELECT COUNT(*) FROM tasks WHERE user_id = ?", (user[0],))
-        task_count = cursor.fetchone()[0]
+        cursor.execute("""
+            SELECT u.id, u.username, u.email,
+                   COUNT(t.id) AS total_tasks,
+                   SUM(CASE WHEN t.status = 'done' THEN 1 ELSE 0 END) AS done_count
+            FROM users u
+            LEFT JOIN tasks t ON t.user_id = u.id
+            GROUP BY u.id, u.username, u.email
+        """)
+        rows = cursor.fetchall()
 
-        cursor.execute("SELECT COUNT(*) FROM tasks WHERE user_id = ? AND status = 'done'", (user[0],))
-        done_count = cursor.fetchone()[0]
+        summary = []
+        for row in rows:
+            summary.append({
+                "username": row[1],
+                "email": row[2],
+                "task_count": row[3],
+                "done_count": row[4],
+            })
 
         summary.append({
             "username": user[1],
